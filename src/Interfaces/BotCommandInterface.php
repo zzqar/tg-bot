@@ -4,6 +4,8 @@ namespace App\Interfaces;
 
 use App\Attribute\TypeCommand;
 use App\Exceptions\NotFoundApiException;
+use App\Helpers\GameResponse;
+use App\Helpers\Response;
 use App\Trait\Bot;
 use Exception;
 use TelegramBot\Api\Client;
@@ -13,6 +15,7 @@ use TelegramBot\Api\Types\Message;
 abstract class BotCommandInterface
 {
     use Bot;
+
     abstract public function getCommand(): string;
 
     abstract public function getDescription(): string;
@@ -49,5 +52,18 @@ abstract class BotCommandInterface
 
         $line = $phrases[random_int(0, count($phrases) - 1)];
         return str_replace("\n", '', $line);
+    }
+
+    public function sendResponse(Client $client, Message $message, Response $response)
+    {
+        return match (true) {
+            $response instanceof GameResponse => $client->sendMessage(
+                $message->getChat()->getId(),
+                $response->getText(), "html", false, null,
+                $response->getInlineKeyboard()
+            ),
+            default => $client->sendMessage($message->getChat()->getId(), $response->getText(), "html")
+        };
+
     }
 }

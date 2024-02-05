@@ -17,6 +17,7 @@ use Throwable;
 class ClientHelper
 {
     use HTML;
+
     /**
      * @throws InvalidJsonException
      */
@@ -146,7 +147,17 @@ class ClientHelper
             } catch (Throwable $exception) {
                 /** @var Message $mess */
                 $mess = $call->getMessage();
-                $client->sendMessage($mess->getChat()->getId(), $exception->getMessage());
+                $renderData = [
+                    ['Параметр' => "File", 'Значение' => basename($exception->getFile())],
+                    ['Параметр' => "Line", 'Значение' => $exception->getLine()],
+                    ['Параметр' => "Message", 'Значение' => $exception->getMessage()],
+                ];
+                $renderer = new ArrayToTextTable($renderData);
+                $client->sendMessage(
+                    $mess->getChat()->getId(),
+                    $this->textToCodeHTML($renderer->getTable()),
+                    'html'
+                );
             }
         });
     }
@@ -160,7 +171,7 @@ class ClientHelper
         foreach ($files as $class) {
             $class = '\App\Logic\BotCommands\\' . pathinfo($class, PATHINFO_FILENAME);
             if (!is_a($class, BotCommandInterface::class, true)) {
-               continue;
+                continue;
             }
             $instance = new $class();
             $client->on(

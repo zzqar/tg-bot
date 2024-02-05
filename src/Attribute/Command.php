@@ -13,12 +13,14 @@ class Command
 {
     protected string $command;
     protected string $description;
+    protected string $uniq;
 
 
-    public function __construct(string $command, string $description = '')
+    public function __construct(string $command, bool $uniq = false, string $description = '')
     {
         $this->command = $command;
         $this->description = $description;
+        $this->uniq = $uniq;
     }
 
     /**
@@ -36,6 +38,12 @@ class Command
     {
         return $this->command;
     }
+
+    public function isUniqRequestMode(): bool
+    {
+        return $this->uniq;
+    }
+
 
 
 }

@@ -54,8 +54,13 @@ abstract class CallbackBotCommandInterface
     {
         $this->client->editMessageReplyMarkup(
             $this->getChatId(),
-            $this->getMessage()->getMessageId()
+            $this->getMessageId(),
         );
+    }
+
+    public function getMessageId(): float|int
+    {
+        return $this->getMessage()->getMessageId();
     }
 
     public function renderResponse(Response $response): void
@@ -63,7 +68,7 @@ abstract class CallbackBotCommandInterface
         if ($response instanceof GameResponse) {
             $this->client->editMessageText(
                 $this->getChatId(),
-                $this->getMessage()->getMessageId(),
+                $this->getMessageId(),
                 $response->getText(),
                 $this->parseMode,
                 false,

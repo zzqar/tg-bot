@@ -5,9 +5,12 @@ namespace App\Helpers;
 use App\Attribute\Command;
 use App\Interfaces\CallbackBotCommandInterface;
 use Generator;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Cache\CacheItem;
 use TelegramBot\Api\Client;
 use TelegramBot\Api\Exception;
 use TelegramBot\Api\Types\CallbackQuery;
@@ -17,12 +20,14 @@ class CallbackHandler
     protected array $commandRouts = [];
 
     protected string $actionCommand;
+    protected FilesystemAdapter $cache;
 
     /**
      * @throws ReflectionException
      */
     public function __construct()
     {
+        $this->cache = new FilesystemAdapter;
         $this->setRouts();
     }
 
@@ -55,7 +60,8 @@ class CallbackHandler
 
                 yield $attrInstance->getCommand() => [
                     'callbackController' => $class,
-                    'action' => $method->getName()
+                    'action' => $method->getName(),
+                    'uniq' => $attrInstance->isUniqRequestMode(),
                 ];
             }
         }
@@ -63,10 +69,22 @@ class CallbackHandler
 
     /**
      * @throws \Exception
+     * @throws InvalidArgumentException
      */
     public function execute(CallbackQuery $call, Client $client): void
     {
         $command = $this->getActionByData($call->getData());
+
+        if ($command['uniq']) {
+            /** @var CacheItem $item */
+            $item = $this->cache->getItem('callback_last_request');
+            if (!array_diff([$call->getFrom()->getId(), $call->getData()], $item->get())) {
+                return;
+            }
+
+            $item->set([$call->getFrom()->getId(), $call->getData()]);
+            $this->cache->save($item);
+        }
 
         /** @var CallbackBotCommandInterface $instance */
         $instance = new $command['callbackController']($client, $call, $this->actionCommand);

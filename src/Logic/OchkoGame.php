@@ -3,6 +3,7 @@
 namespace App\Logic;
 
 use App\Trait\HTML;
+use MathieuViossat\Util\ArrayToTextTable;
 use Psr\Cache\InvalidArgumentException;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use TelegramBot\Api\Client;
@@ -391,7 +392,9 @@ class OchkoGame
             implode("\n", $text),
             "Markdown",
             false,
-            $botScore ? null : $this->keyboard()
+            $botScore ?
+                new InlineKeyboardMarkup([[['text' => 'Назад', 'callback_data' => '/back ']]])
+                : $this->keyboard()
         );
 
 
@@ -413,14 +416,20 @@ class OchkoGame
         } catch (\Throwable $exception) {
             $usersSaved = [];
         }
-        $text[] = 'Статистика';
+        $text[] = $this->textToBoldHTML('Статистика');
 
         foreach ($usersSaved as $name => $usr) {
             $wins = $usr['win'] ?? 0;
             $looses = $usr['loose'] ?? 0;
-
-            $text[] = "{$name}: Побед {$wins} / Проебов {$looses}";
+           
+                $renderData[] = [
+                    'Имя' => $name,
+                    'Побед' => $usr['win'] ?? 0,
+                    'Проебов' => $usr['loose'] ?? 0,
+                ];
         }
+        $renderer = new ArrayToTextTable($renderData);
+        $text[] = $this->textToCodeHTML($renderer->getTable());
 
         $keyboard = new InlineKeyboardMarkup([
             [
@@ -431,7 +440,7 @@ class OchkoGame
             $this->message->getChat()->getId(),
             $call->getMessage()->getMessageId(),
             implode("\n", $text),
-            "Markdown",
+            "html",
             false,
             $keyboard
         );

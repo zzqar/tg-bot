@@ -1,5 +1,6 @@
 <?php
 /**
+ * @DentalPRO TGBOT
  *
  * @see api reference
  * https://github.com/TelegramBot/Api

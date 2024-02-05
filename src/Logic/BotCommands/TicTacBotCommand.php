@@ -3,7 +3,7 @@
 namespace App\Logic\BotCommands;
 
 use App\Attribute\TypeCommand;
-use App\Game\TicTacGame;
+use App\Game\TicTac\TicTacGame;
 use App\Interfaces\BotCommandInterface;
 use TelegramBot\Api\Client;
 use TelegramBot\Api\Types\Message;
@@ -24,20 +24,21 @@ class TicTacBotCommand extends BotCommandInterface
 
     public function execute(Message $message, Client $client): void
     {
-        $ticTac = new TicTacGame();
-        if ($id = $ticTac->getMessByChatId($message->getChat()->getId())) {
-            $client->deleteMessage($message->getChat()->getId(), $id);
+        $ticTac = new TicTacGame;
+        if ($this->getParamByKey('clear')){
+            $ticTac->clearStats();
+            $client->deleteMessage($message->getChat()->getId(), $message->getMessageId());
+            return;
         }
-        $response = $ticTac->search();
+
+        if ($id = $ticTac->getMessByChatId($message->getChat()->getId())) {
+            try {
+                $client->deleteMessage($message->getChat()->getId(), $id);
+            } catch (\Throwable $e) {}
+        }
+        $response = $ticTac->renderByState();
         /** @var Message $mess */
-        $mess = $client->sendMessage(
-            $message->getChat()->getId(),
-            $response->getText(),
-            "Markdown",
-            false,
-            null,
-            $response->getInlineKeyboard()
-        );
+        $mess = $this->sendResponse($client, $message, $response);
         $ticTac->setMessId($message->getChat()->getId(), $mess->getMessageId());
 
     }
