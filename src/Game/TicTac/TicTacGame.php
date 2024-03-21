@@ -8,31 +8,25 @@ use App\Game\TicTac\Enum\MoveResult;
 use App\Game\TicTac\Enum\State;
 use App\Game\TicTac\GameBoard\Board;
 use App\Game\TicTac\GameBoard\Board3x3;
-use App\Helpers\GameAlert;
-use App\Helpers\GameResponse;
-use App\Helpers\Response;
-use App\Trait\HTML;
+use App\Game\TicTac\GameBoard\Board4x4;
 use Exception;
-use MathieuViossat\Util\ArrayToTextTable;
 use Psr\Cache\InvalidArgumentException;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Contracts\Cache\ItemInterface;
 use TelegramBot\Api\Types\User;
-use Throwable;
 
 class TicTacGame
 {
-    use HTML;
-
-    protected const STATS_FILENAME = 'tictac_stats.json';
-    protected string $cacheKey = 'tic-tack';
+    protected const CACHE_KEY = 'tic-tack';
     protected FilesystemAdapter $cache;
     protected array $players = [];
     protected int $actionPlayer = 0;
     protected int $botLVL = 0;
     protected array $actionMessId = [];
     protected State $state = State::menu;
-    protected ?MoveResult $moveState = null;
+    protected State $preState = State::menu;
+
+    protected MoveResult $moveState = MoveResult::RESUME;
 
     protected Board $board;
 
@@ -46,31 +40,14 @@ class TicTacGame
         $this->map($data);
     }
 
+    public function getState(): State
+    {
+        return $this->state;
+    }
+
     public function getMessByChatId($chatId)
     {
         return $this->actionMessId[$chatId] ?? null;
-    }
-
-    protected function getStats(): array
-    {
-        try {
-            return json_decode(file_get_contents(self::STATS_FILENAME), true, 512, JSON_THROW_ON_ERROR);
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @throws GameException
-     */
-    private function setStats(array $stats): void
-    {
-        try {
-            file_put_contents(self::STATS_FILENAME, json_encode($stats, JSON_THROW_ON_ERROR));
-        } catch (Throwable $e) {
-            throw new GameException($e->getMessage());
-        }
-
     }
 
     /**
@@ -79,15 +56,18 @@ class TicTacGame
     protected function getOfCache()
     {
         try {
-            return $this->cache->get($this->cacheKey, function (ItemInterface $item): array {
+            return $this->cache->get(static::CACHE_KEY, function (ItemInterface $item): array {
                 $item->expiresAfter(60 * 60 * 24);
+                $board = $this->getBoardBySetting();
                 return [
                     'state' => $this->state,
-                    'board' => $this->board ?? new Board3x3(),
+                    'preState' => $this->preState,
+                    'board' => $this->board ?? new $board,
                     'action_mess_id' => $this->actionMessId,
                     'players' => $this->players,
                     'action_p' => $this->actionPlayer,
                     'botLVL' => $this->botLVL,
+                    'moveState' => $this->moveState
                 ];
             });
         } catch (InvalidArgumentException $exception) {
@@ -99,36 +79,25 @@ class TicTacGame
     protected function map(array $data): void
     {
         $this->state = $data['state'];
+        $this->preState = $data['preState'];
         $this->players = $data['players'];
         $this->actionPlayer = $data['action_p'];
         $this->board = $data['board'];
         $this->actionMessId = $data['action_mess_id'];
         $this->botLVL = $data['botLVL'];
+        $this->moveState = $data['moveState'];
     }
 
     /**
      * @throws GameException
      */
-    protected function clearCache(): void
+    public static function clearCache(): void
     {
         try {
-            $this->cache->delete($this->cacheKey);
+            (new FilesystemAdapter)->delete(self::CACHE_KEY);
         } catch (InvalidArgumentException $e) {
             throw new GameException("Проблемки с очисткой кеша: " . $e->getMessage());
         }
-    }
-
-    public function renderByState(): Response
-    {
-        return match ($this->state) {
-            State::menu => $this->renderMenu(),
-            State::search => $this->renderSearch(),
-            State::pvp, State::bot_play => $this->renderGame(),
-            State::end => $this->renderEnd(),
-            State::bot_menu => $this->renderBotMenu(),
-            State::stats_menu => $this->renderStatsMenu(),
-            default => new GameAlert("Не определенный статус игры")
-        };
     }
 
     /**
@@ -175,6 +144,7 @@ class TicTacGame
      */
     protected function setState(State $state): void
     {
+        $this->preState = $this->state;
         $this->state = $state;
         $this->resetCache();
     }
@@ -194,56 +164,10 @@ class TicTacGame
      */
     public function resetCache(): mixed
     {
-        $this->clearCache();
+        static::clearCache();
         return $this->getOfCache();
     }
 
-
-    protected function renderMenu(): Response
-    {
-        $text = [
-            $this->textToBoldHTML('Крестики нолики (Меню)'),
-            str_repeat('.', 48),
-            '- играть 1 на 1',
-            '- играть с ботом',
-            '- посмотреть статистику',
-        ];
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::menu()
-        );
-    }
-
-    protected function renderSearch(): Response
-    {
-        $count = count($this->players);
-        $text = [
-            $this->textToBoldHTML('Крестики нолики (Поиск)'),
-            str_repeat('.', 48),
-            'Игроки (' . $count . '/2):'
-        ];
-        foreach ($this->players as $player) {
-            $text[] = $player->getUsername();
-        }
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::search()
-        );
-    }
-
-    protected function renderGame(): GameResponse
-    {
-        $actionItem = BoardValue::getByIndex($this->actionPlayer);
-        /** @var User $player */
-        $player = $this->players[$this->actionPlayer];
-        return new GameResponse(
-            implode("\n", [
-                "Ход игрока: {$player->getUsername()} -> $actionItem->value",
-                $this->board->renderBoard()
-            ]),
-            Keyboard::game($this->board)
-        );
-    }
 
     /**
      * @throws GameException
@@ -266,10 +190,18 @@ class TicTacGame
         if ($this->state === $state && $this->players === [] && !$force) {
             throw new GameException('Кеш уже чист');
         }
-        $this->clearCache();
+        static::clearCache();
         $game = (new static);
         $game->setState($state);
         return $game;
+    }
+
+    /**
+     * @throws GameException
+     */
+    public function settingsAction(): void
+    {
+        $this->setState(State::settings);
     }
 
     /**
@@ -301,8 +233,6 @@ class TicTacGame
     protected function move(Move $move): void
     {
         $this->moveState = $this->board->makeMove($move);
-        $this->resetCache();
-
         switch ($this->moveState) {
             case MoveResult::RESUME:
                 $this->actionPlayer = (int)!$this->actionPlayer;
@@ -330,7 +260,6 @@ class TicTacGame
         $this->move($botMove);
     }
 
-
     /**
      * @throws GameException
      */
@@ -341,96 +270,12 @@ class TicTacGame
         return $static;
     }
 
-    public function statsSelfAction(User $user): Response
-    {
-        return $this->renderStatsByName($user->getUsername());
-    }
-
-    protected function renderStatsByName(string $name): GameResponse
-    {
-        $stats = $this->getStats();
-        $renderData = [];
-        foreach ($stats[$name] ?? [] as $nameRival => $rival){
-            $renderData[] = [
-                'Противник' => $nameRival,
-                'Побед' => $rival['win'] ?? 0,
-                'Проебов' => $rival['loose'] ?? 0,
-            ];
-        }
-        $renderer = new ArrayToTextTable($renderData);
-        $result = ($renderData === []) ? "Нет результатов" :  $renderer->getTable();
-        $text = [
-            $this->textToBoldHTML('(Статистика)'),
-            str_repeat('.', 48),
-            'Игрок: ' . $name,
-            $this->textToCodeHTML($result)
-        ];
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::statsSelf()
-        );
-
-    }
-
-    public function statsTargetAction(string $user): Response
-    {
-        return $this->renderStatsByName($user);
-    }
-    public function statsAll(): Response
-    {
-        $stats = $this->getStats();
-
-        $renderData = [];
-        foreach ($stats ?? [] as $name => $rivals){
-            $win = $loose = 0;
-            foreach($rivals as $rival){
-                $win += $rival['win'] ?? 0;
-                $loose += $rival['loose'] ?? 0;
-            }
-            $renderData[] = [
-                'Игрок' => $name,
-                'Побед' => $win,
-                'Проебов' => $loose,
-            ];
-        }
-
-        $renderer = new ArrayToTextTable($renderData);
-        $text = [
-            $this->textToBoldHTML('(Статистика)'),
-            str_repeat('.', 48),
-
-            $this->textToCodeHTML($renderer->getTable())
-        ];
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::statsSelf()
-        );
-    }
-
-    public function statsSelectAction(): Response
-    {
-        $stats = $this->getStats();
-        $user = array_keys($stats);
-
-        $text = [
-            $this->textToBoldHTML('(Статистика)'),
-            str_repeat('.', 48),
-            'Выберите игрока',
-
-        ];
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::statsSelect($user)
-        );
-    }
-
-
     /**
      * @throws GameException
      */
     protected function saveResult(): void
     {
-        $stats = $this->getStats();
+        $stats = Statistic::getStats();
 
         $playerOne = $this->players[$this->actionPlayer]->getUsername();
         $playerTwo = $this->players[(int)!$this->actionPlayer]->getUsername();
@@ -441,56 +286,7 @@ class TicTacGame
         $stats[$playerTwo][$playerOne]['loose']++;
         $stats[$playerOne][$playerTwo]['win']++;
 
-        $this->setStats($stats);
-    }
-
-    protected function renderEnd(): GameResponse
-    {
-        $stats = $this->getStats();
-
-        $playerOne = $this->players[$this->actionPlayer]->getUsername();
-        $playerTwo = $this->players[(int)!$this->actionPlayer]->getUsername();
-
-        $finishText = (isset($this->moveState) && $this->moveState === MoveResult::WIN) ? "Победил: $playerOne" : "Ничья";
-        $p1 = [];
-        $p1['win']  = 0;
-        $p1['loose'] = 0;
-        $p2 = $p1;
-        foreach ($stats[$playerOne] ?? [] as $rival){
-            $p1['win'] += $rival['win'] ?? 0;
-            $p1['loose'] += $rival['loose'] ?? 0;
-        }
-        foreach ($stats[$playerTwo] ?? [] as $rival){
-            $p2['win'] += $rival['win'] ?? 0;
-            $p2['loose'] += $rival['loose'] ?? 0;
-        }
-
-        $text = [
-            $this->textToBoldHTML('Крестики нолики (ФИНИШ)'),
-            str_repeat('.', 48),
-            $finishText,
-            "$playerOne: {$p1['win']} побед / {$p1['loose']} - проебов",
-            "$playerTwo: {$p2['win']} побед / {$p2['loose']} - проебов",
-            str_repeat('.', 48),
-            $this->board->renderBoard()
-        ];
-
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::finish()
-        );
-    }
-
-    public function renderBotMenu(): Response
-    {
-        $text = [
-            $this->textToBoldHTML('Крестики нолики (BOT)'),
-            'Выберите сложность бота'
-        ];
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::bot()
-        );
+        Statistic::setStats($stats);
     }
 
     /**
@@ -504,27 +300,43 @@ class TicTacGame
         $this->setState(State::bot_play);
     }
 
-    protected function renderStatsMenu(): Response
+    public function getPlayers(): array
     {
-        $text = [
-            $this->textToBoldHTML('Крестики нолики (Статистика)'),
-            str_repeat('.', 48),
-            '- Посмотреть свою (детальная)',
-            '- Посмореть чью-то (детальная)',
-            '- Общая',
-        ];
-        return new GameResponse(
-            implode("\n", $text),
-            Keyboard::menuStats()
-        );
+        return $this->players;
     }
 
-    /**
-     * @throws GameException
-     */
-    public function clearStats(): void
+    public function getActionPlayer(): int
     {
-        $this->setStats([]);
+        return $this->actionPlayer;
+    }
+
+    public function getBoard(): Board
+    {
+        return $this->board;
+    }
+
+    public function checkPreState(State $state): bool
+    {
+        return $this->preState === $state;
+    }
+
+    public function getMoveState(): ?MoveResult
+    {
+        return $this->moveState ?? null;
+    }
+
+    protected function getBoardBySetting(): string
+    {
+        return match(Statistic::getBoard()) {
+            4 => Board4x4::class,
+            default => Board3x3::class
+        };
+    }
+
+    public function setBoardSize(int $size)
+    {
+        Statistic::setBoard($size);
+        $this->setState(State::settings);
     }
 
 

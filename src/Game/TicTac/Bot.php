@@ -26,8 +26,17 @@ class Bot
         if ($random < $x) {
             $move = Move::randomMove($board);
         } else {
-            $score = $this->miniMax($board, $this->seed, 9);
+            //$score = $this->miniMax($board, $this->seed, 8);
+            // пробуем альфа-бета отсечение
+            $score = $this->alphaBeta(
+                $board,
+                $this->seed,
+                8,
+                PHP_INT_MIN,
+                PHP_INT_MAX
+            );
             $move = $score->getMove();
+
         }
         $move->setValue($this->seed);
         return $move;
@@ -49,11 +58,11 @@ class Bot
      */
     private function miniMax(Board $board, BoardValue $seed, int $depth): Score
     {
-
         $bestScore = $this->isBotMove($seed) ? PHP_INT_MIN : PHP_INT_MAX;
         $bestPos = new Move();
-        if ($board->compileGameLogic($seed->getAnother()) !== MoveResult::RESUME) {
-            $bestScore = $this->simpleEvaluate($board);
+
+        if ($depth === 0 || $board->compileGameLogic() !== MoveResult::RESUME) {
+            $bestScore = $this->evaluate($board);
 
         } else {
             $boardClone = clone $board;
@@ -69,8 +78,8 @@ class Bot
                     )->getScore();
                 if (
                     ($this->isBotMove($seed) && $currentScore > $bestScore) ||
-                    (!$this->isBotMove($seed) && $currentScore < $bestScore) ||
-                    ($currentScore === $bestScore && random_int(0, 1) === 1)
+                    (!$this->isBotMove($seed) && $currentScore < $bestScore)// ||
+                    //($currentScore === $bestScore && random_int(0, 1) === 1)
                 ) {
                     $bestScore = $currentScore;
                     $bestPos = $move;
@@ -81,24 +90,66 @@ class Bot
             }
 
         }
-        return new Score($bestPos, $bestScore);
+        return new Score($bestScore,$bestPos);
     }
 
-    /**
-     * Анализ доски - подсчет очков
-     *
-     * @param Board $board
-     * @return int
-     */
-    private function simpleEvaluate(Board $board): int
+    private function alphaBeta(Board $board, BoardValue $seed, int $depth, int $alpha, int $beta): Score
     {
-        if ($board->checkWin($this->seed)) {
-            return 10;
+        if ($depth === 0 || $board->compileGameLogic() !== MoveResult::RESUME) {
+            return new Score($this->evaluate($board));
         }
-        if ($board->checkWin($this->seedOpp)) {
-            return -10;
+
+        $boardClone = clone $board;
+        $bestScore = $this->isBotMove($seed) ? PHP_INT_MIN : PHP_INT_MAX;
+        $bestPos = new Move();
+
+        foreach (Move::emptyCoordinateByBoard($boardClone) as $move) {
+            $move->setValue($seed);
+            $boardClone->setMove($move);
+            $currentScore = $this->alphaBeta(
+                $boardClone,
+                $seed->getAnother(),
+                $depth - 1,
+                $alpha,
+                $beta
+            )->getScore();
+
+            if (
+                ($this->isBotMove($seed) && $currentScore > $bestScore) ||
+                (!$this->isBotMove($seed) && $currentScore < $bestScore)// ||
+                //($currentScore === $bestScore && random_int(0, 1) === 1)
+            ) {
+                $bestPos = $move;
+            }
+
+            if ($this->isBotMove($seed)) {
+                $bestScore = max($bestScore, $currentScore);
+                $alpha = max($alpha, $bestScore);
+            } else {
+                $bestScore = min($bestScore, $currentScore);
+                $beta = min($beta, $bestScore);
+            }
+
+
+            if ($beta <= $alpha) {
+                break; // Произошло отсечение
+            }
+            $move->setValue(BoardValue::null);
+            $boardClone->setMove($move);
         }
-        return 0;
+        return new Score($bestScore, $bestPos);
+    }
+
+
+    protected function evaluate(Board $board): int
+    {
+        $lines = $board->getWinnerLines();
+        $sum = 0;
+        foreach ($lines as $line) {
+            $sum += $board->analyzeLine($line, $this->seed);
+        }
+
+        return $sum;
     }
 
 }

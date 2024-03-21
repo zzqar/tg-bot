@@ -5,11 +5,11 @@ namespace App\Logic\CallbackCommands;
 use App\Attribute\Command;
 use App\Exceptions\GameException;
 use App\Game\TicTac\Enum\State;
+use App\Game\TicTac\GameRender;
 use App\Game\TicTac\Move;
 use App\Game\TicTac\TicTacGame;
 use App\Helpers\GameAlert;
 use App\Interfaces\CallbackBotCommandInterface;
-use TelegramBot\Api\Types\User;
 
 
 class TictacBotCommand extends CallbackBotCommandInterface
@@ -25,43 +25,45 @@ class TictacBotCommand extends CallbackBotCommandInterface
     #[Command('tic_search')]
     public function search(): void
     {
-        $game = new TicTacGame;
         try {
-            $static = $game->restartAction(State::search);
-            $static->setMessId($this->getChatId(), $this->getMessageId());
+            (new TicTacGame)
+                ->restartAction(State::search)
+                ->setMessId($this->getChatId(), $this->getMessageId());
+
+            $this->renderResponse((new GameRender)->render());
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
-            return;
         }
-        $this->renderResponse($static->renderByState());
+
     }
 
     #[Command('tic_menu')]
     public function menu(): void
     {
-        $game = new TicTacGame;
         try {
-            $static = $game->restartAction(State::menu);
-            $static->setMessId($this->getChatId(), $this->getMessageId());
+            (new TicTacGame)
+                ->restartAction(State::menu)
+                ->setMessId($this->getChatId(), $this->getMessageId());
+
+            $this->renderResponse((new GameRender)->render());
+
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
             return;
         }
-        $this->renderResponse($static->renderByState());
     }
 
     #[Command('tic_register')]
     public function register(): void
     {
-        $user = $this->callback->getFrom();
-        $game = new TicTacGame;
         try {
-            $game->registerAction($user);
+            (new TicTacGame)->registerAction($this->callback->getFrom());
+
+            $this->renderResponse((new GameRender)->render());
+
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
-            return;
         }
-        $this->renderResponse($game->renderByState());
     }
 
 
@@ -72,104 +74,126 @@ class TictacBotCommand extends CallbackBotCommandInterface
             $this->renderResponse(new GameAlert('Кнопка залочена. Че жмешь?'));
             return;
         }
-
-        $game = new TicTacGame;
-        $user = $this->callback->getFrom();
-        $move = (new Move)->setCoordinate(
-            $this->getParamByKey('y'),
-            $this->getParamByKey('x')
-        );
         try {
-            $game->moveAction($user, $move);
+            (new TicTacGame)->moveAction(
+                $this->callback->getFrom(),
+                (new Move)->setCoordinate(
+                    $this->getParamByKey('y'),
+                    $this->getParamByKey('x')
+                )
+            );
+            $this->renderResponse((new GameRender)->render());
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
             return;
         }
-        $this->renderResponse($game->renderByState());
     }
 
     #[Command('tic_bot_menu')]
     public function botMenu(): void
     {
-        $game = new TicTacGame;
-        $user = $this->callback->getFrom();
         try {
-            $static = $game->botMenuAction($user);
+            (new TicTacGame)
+                ->botMenuAction($this->callback->getFrom())
+                ->setMessId($this->getChatId(), $this->getMessageId());
+
+            $this->renderResponse( (new GameRender)->render());
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
-            return;
         }
-        $this->renderResponse($static->renderByState());
     }
 
     #[Command('tic_bot_start', true)]
     public function startWithBot(): void
     {
-        /** @var User $bot */
-        $bot = $this->getMessage()->getFrom();
-        $game = new TicTacGame;
-        $lvl = $this->getParamByKey('lvl', 0);
         try {
-            $game->startBotAction($lvl, $bot);
+            (new TicTacGame)->startBotAction(
+                $this->getParamByKey('lvl'),
+                $this->getMessage()->getFrom()
+            );
+
+            $this->renderResponse( (new GameRender)->render());
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
-            return;
         }
-        $this->renderResponse($game->renderByState());
     }
 
     #[Command('tic_stats', true)]
     public function statsMenu(): void
     {
-        $game = new TicTacGame;
         try {
-            $static = $game->restartAction(State::stats_menu, true);
-            $static->setMessId($this->getChatId(), $this->getMessageId());
+            (new TicTacGame)
+                ->restartAction(State::stats_menu, true)
+                ->setMessId($this->getChatId(), $this->getMessageId());
+
+            $this->renderResponse((new GameRender)->render());
         } catch (GameException $e) {
             $this->renderResponse(new GameAlert($e->getMessage()));
-            return;
         }
-        $this->renderResponse($static->renderByState());
-
     }
 
     #[Command('tic_stats_self', true)]
     public function statsSelf(): void
     {
-        $game = new TicTacGame;
         $this->renderResponse(
-            $game->statsSelfAction($this->callback->getFrom())
+            (new GameRender)->renderStatsByName(
+                $this->callback->getFrom()->getUsername()
+            )
         );
+    }
 
+    #[Command('tic_setting', true)]
+    public function setting(): void
+    {
+        try {
+            (new TicTacGame)->settingsAction();
+
+            $this->renderResponse((new GameRender())->render());
+
+        } catch (GameException $e) {
+            $this->renderResponse(new GameAlert($e->getMessage()));
+            return;
+        }
     }
 
     #[Command('tic_stats_select', true)]
     public function statsSelect(): void
     {
-        $game = new TicTacGame;
         $this->renderResponse(
-            $game->statsSelectAction()
+            (new GameRender)->statsSelectRender()
         );
     }
 
     #[Command('tic_stats_target', true)]
     public function statsTarget(): void
     {
-        $game = new TicTacGame;
-        $name = $this->getParamByKey('name');
         $this->renderResponse(
-            $game->statsTargetAction($name)
+            (new GameRender)->renderStatsByName(
+                $this->getParamByKey('name')
+            )
         );
     }
 
     #[Command('tic_stats_all', true)]
     public function statsAll(): void
     {
-        $game = new TicTacGame;
-        $this->renderResponse(
-            $game->statsAll()
-        );
+        $this->renderResponse( (new GameRender)->statsAll());
     }
+
+    #[Command('tic_setting_board_size_select', true)]
+    public function boardSize(): void
+    {
+        $this->renderResponse( (new GameRender)->boardSizeSettings());
+    }
+
+    #[Command('tic_set_board_size', true)]
+    public function setBoardSize(): void
+    {
+        (new TicTacGame)->setBoardSize($this->getParamByKey('size'));
+        $this->renderResponse( (new GameRender)->render());
+    }
+
+
 
 
 }

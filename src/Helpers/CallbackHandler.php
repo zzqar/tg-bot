@@ -74,17 +74,17 @@ class CallbackHandler
     public function execute(CallbackQuery $call, Client $client): void
     {
         $command = $this->getActionByData($call->getData());
-
-        if ($command['uniq']) {
-            /** @var CacheItem $item */
-            $item = $this->cache->getItem('callback_last_request');
-            if (!array_diff([$call->getFrom()->getId(), $call->getData()], $item->get())) {
-                return;
-            }
-
-            $item->set([$call->getFrom()->getId(), $call->getData()]);
-            $this->cache->save($item);
+        /** @var CacheItem $item */
+        $item = $this->cache->getItem('callback_last_request');
+        $itemData = [
+            $call->getFrom()->getId(),
+            $call->getData()
+        ];
+        if ($command['uniq'] && !array_diff($itemData, $item->get() ?? [])) {
+            return;
         }
+        $item->set($itemData);
+        $this->cache->save($item);
 
         /** @var CallbackBotCommandInterface $instance */
         $instance = new $command['callbackController']($client, $call, $this->actionCommand);

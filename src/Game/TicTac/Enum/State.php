@@ -12,4 +12,5 @@ enum State
     case pvp;
     case end;
     case stats_menu;
+    case settings;
 }

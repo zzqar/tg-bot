@@ -9,6 +9,7 @@ class Move
 {
     protected int $x;
     protected int $y;
+    protected bool $isEmpty = true;
     protected BoardValue $value;
 
     /**
@@ -30,7 +31,13 @@ class Move
     {
         $this->x = $x;
         $this->y = $y;
+        $this->isEmpty = false;
         return $this;
+    }
+
+    public function isEmpty(): bool
+    {
+        return $this->isEmpty;
     }
 
     /**

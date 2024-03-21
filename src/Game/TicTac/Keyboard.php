@@ -12,14 +12,26 @@ class Keyboard
     {
         return new InlineKeyboardMarkup([
             [
-                ['text' => 'Своя', 'callback_data' => '/tic_stats_self'],
-                ['text' => 'Выбрать игрока', 'callback_data' => '/tic_stats_select']
+                ['text' => '👤 Своя', 'callback_data' => '/tic_stats_self'],
             ],
             [
-                ['text' => 'Общая', 'callback_data' => '/tic_stats_all']
+                ['text' => '🔎 Выбрать', 'callback_data' => '/tic_stats_select'],
+                ['text' => '👥 Общая', 'callback_data' => '/tic_stats_all']
             ],
             [
-                ['text' => 'В меню', 'callback_data' => '/tic_menu']
+               static::inMenu()
+            ],
+        ]);
+    }
+
+    public static function settings(): InlineKeyboardMarkup
+    {
+        return new InlineKeyboardMarkup([
+            [
+                ['text' => 'Выбрать доску', 'callback_data' => '/tic_setting_board_size_select'],
+            ],
+            [
+                static::inMenu()
             ],
         ]);
     }
@@ -28,13 +40,14 @@ class Keyboard
     {
         return new InlineKeyboardMarkup([
             [
-                ['text' => '1 на 1', 'callback_data' => '/tic_search']
+                ['text' => '⚔️ 1 на 1', 'callback_data' => '/tic_search'],
+                ['text' => '🤖 C ботом', 'callback_data' => '/tic_bot_menu']
             ],
             [
-                ['text' => 'C ботом', 'callback_data' => '/tic_bot_menu']
+                ['text' => '⚙️ Настройки', 'callback_data' => '/tic_setting']
             ],
             [
-                ['text' => 'Статистика', 'callback_data' => '/tic_stats']
+                ['text' => '📊 Статистика', 'callback_data' => '/tic_stats']
             ],
         ]);
     }
@@ -43,12 +56,10 @@ class Keyboard
     {
         return new InlineKeyboardMarkup([
             [
-                ['text' => 'Учавствовать', 'callback_data' => '/tic_register'],
-                ['text' => 'Перезапустить', 'callback_data' => '/tic_search']
+                ['text' => '💅 Учавствовать', 'callback_data' => '/tic_register'],
+                ['text' => '🔃 Перезапустить', 'callback_data' => '/tic_search']
             ],
-            [
-                ['text' => 'В меню', 'callback_data' => '/tic_menu']
-            ],
+            [static::inMenu()],
 
         ]);
     }
@@ -59,23 +70,22 @@ class Keyboard
         foreach ($board->getBoard() as $y => $line) {
             $lineKey = [];
             foreach ($line as $x => $item) {
-                if ($item === BoardValue::null) {
-                    $lineKey[] = ['text' => "🟩", 'callback_data' => "/tic_move -x=$x -y=$y"];
-                } else {
-                    $lineKey[] = ['text' => "🔒", 'callback_data' => "/tic_move -block=1 "];
-                }
+                $lineKey[] = ($item === BoardValue::null)
+                    ? ['text' => "🟩", 'callback_data' => "/tic_move -x=$x -y=$y"]
+                    : ['text' => "🔒", 'callback_data' => "/tic_move -block=1"];
             }
             $key[] = $lineKey;
         }
-        $key[] = [['text' => 'В меню', 'callback_data' => '/tic_menu']];
+        $key[] = [static::inMenu()];
         return new InlineKeyboardMarkup($key);
     }
 
-    public static function finish(): InlineKeyboardMarkup
+    public static function finish(bool $bot = false): InlineKeyboardMarkup
     {
         return new InlineKeyboardMarkup([
             [
-                ['text' => 'В меню', 'callback_data' => '/tic_menu']
+                ['text' => '🔃 Заново', 'callback_data' => $bot ? '/tic_bot_menu' : '/tic_search'],
+                static::inMenu()
             ],
         ]);
     }
@@ -84,9 +94,25 @@ class Keyboard
     {
         return new InlineKeyboardMarkup([
             [
-                ['text' => 'Назад', 'callback_data' => '/tic_stats'],
-                ['text' => 'В меню', 'callback_data' => '/tic_menu']
+                ['text' => '◀️ Назад', 'callback_data' => '/tic_stats'],
+                static::inMenu()
+            ]
+        ]);
+    }
+
+    public static function boardSizeSettings(): InlineKeyboardMarkup
+    {
+        return new InlineKeyboardMarkup([
+            [
+                ['text' => '3 на 3', 'callback_data' => '/tic_set_board_size -size=3'],
             ],
+            [
+                ['text' => '4 на 4', 'callback_data' => '/tic_set_board_size -size=4'],
+            ],
+            [
+                ['text' => '◀️ Назад', 'callback_data' => '/tic_setting'],
+                static::inMenu()
+            ]
         ]);
     }
 
@@ -98,8 +124,8 @@ class Keyboard
         );
         $inlineArray = array_chunk($keys, 3);
         $inlineArray[] = [
-            ['text' => 'Назад', 'callback_data' => '/tic_stats'],
-            ['text' => 'В меню', 'callback_data' => '/tic_menu']
+            ['text' => '◀️ Назад', 'callback_data' => '/tic_stats'],
+            static::inMenu()
         ];
         return new InlineKeyboardMarkup($inlineArray);
     }
@@ -108,24 +134,21 @@ class Keyboard
     {
         return new InlineKeyboardMarkup([
             [
-                ['text' => 'Анрил', 'callback_data' => '/tic_bot_start -lvl=100']
+                ['text' => '⚠️ Анрил', 'callback_data' => '/tic_bot_start -lvl=100'],
+                ['text' => '😈 Нормуль', 'callback_data' => '/tic_bot_start -lvl=75']
             ],
             [
-                ['text' => 'Выше среднего', 'callback_data' => '/tic_bot_start -lvl=75']
+                ['text' => '🤠 Просто', 'callback_data' => '/tic_bot_start -lvl=50'],
+                ['text' => '♿️ Изи', 'callback_data' => '/tic_bot_start -lvl=25'],
+                ['text' => '🚼 Детеский', 'callback_data' => '/tic_bot_start -lvl=0']
             ],
-            [
-                ['text' => 'Нормуль', 'callback_data' => '/tic_bot_start -lvl=50']
-            ],
-            [
-                ['text' => 'Слишком просто', 'callback_data' => '/tic_bot_start -lvl=25']
-            ],
-            [
-                ['text' => 'Для детей', 'callback_data' => '/tic_bot_start -lvl=0']
-            ],
-            [
-                ['text' => 'В меню', 'callback_data' => '/tic_menu']
-            ],
+            [static::inMenu()],
         ]);
-
     }
+
+    protected static function inMenu(): array
+    {
+        return ['text' => '🏠 В меню', 'callback_data' => '/tic_menu'];
+    }
+
 }

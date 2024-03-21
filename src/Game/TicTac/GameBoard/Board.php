@@ -10,6 +10,7 @@ use App\Game\TicTac\Move;
 abstract class Board
 {
     protected array $board;
+    protected Move $lastMove;
 
     public function __construct()
     {
@@ -37,13 +38,13 @@ abstract class Board
             throw new GameException('Клета занята или не существует');
         }
         $this->setMove($move);
-        return $this->compileGameLogic($move->getValue());
+        return $this->compileGameLogic();
 
     }
 
-    public function compileGameLogic(BoardValue $value): MoveResult
+    public function compileGameLogic(): MoveResult
     {
-        if ($this->checkWin($value)) {
+        if ($this->checkWin()) {
             return MoveResult::WIN;
         }
         if ($this->checkDraw()) {
@@ -54,8 +55,14 @@ abstract class Board
 
     public function setMove(Move $move): void
     {
+        $this->lastMove = $move;
         $this->board[$move->getY()][$move->getX()] = $move->getValue();
     }
+    protected function getByCoordinate(array $coordinate): BoardValue
+    {
+        return  $this->board[$coordinate[0]][$coordinate[1]];
+    }
+
 
     protected function canMove(Move $move): bool
     {
@@ -63,7 +70,25 @@ abstract class Board
             && $this->board[$move->getY()][$move->getX()] === BoardValue::null;
     }
 
-    abstract public function checkWin(BoardValue $value): bool;
+    public function checkWin(): bool
+    {
+        $checkCoordinate = [$this->lastMove->getY(), $this->lastMove->getX()];
+        foreach ($this->getWinnerCoordinates() as $line) {
+            if (in_array($checkCoordinate, $line, true))
+            {
+                $results = $this->analyzeLine(
+                    $this->getValuesByLineCoordinate($line),
+                    $this->lastMove->getValue()
+                );
+
+                if ($results === 100000) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 
     protected function checkDraw(): bool
     {
@@ -78,19 +103,6 @@ abstract class Board
         return true;
     }
 
-    public function renderBoard(): string
-    {
-        $text = [];
-        foreach ($this->board as $line) {
-            $text[] = implode('', array_map(
-                    static fn($value) => $value->value,
-                    $line
-                )
-            );
-        }
-        return implode("\n", $text);
-    }
-
     /**
      * @return array
      */
@@ -99,5 +111,83 @@ abstract class Board
         return $this->board;
     }
 
+    public function getWinnerLines(): array
+    {
+        $coordinateArray = $this->getWinnerCoordinates();
+        $result = [];
+        foreach ($coordinateArray as $lineCoordinate) {
+            $result[] = $this->getValuesByLineCoordinate($lineCoordinate);
+        }
+        return $result;
+    }
+
+    protected  function getValuesByLineCoordinate($lineCoordinate): array
+    {
+        $line = [];
+        foreach ($lineCoordinate as $itemCoordinate) {
+            $line[] = $this->getByCoordinate($itemCoordinate);
+        }
+        return $line;
+
+    }
+
+    abstract protected function getWinnerCoordinates(): array;
+
+    public function analyzeLine(array $arr, BoardValue $value): int
+    {
+        $count = [];
+        $countElem = 0;
+        foreach ($arr as $element) {
+            if (!isset($count[$element->name])) {
+                $count[$element->name] = 0;
+            }
+            $count[$element->name]++;
+            $countElem++;
+        }
+
+        $countEnemy = $count[$value->getAnother()->name] ?? 0;
+        $countPlayer = $count[$value->name] ?? 0;
+        $countNull = $count[BoardValue::null->name] ?? 0;
+
+        /**
+         * Правило 1: 100% - ничья
+         */
+        if ($countEnemy > 0 && $countPlayer > 0) {
+            return 0;
+        }
+        // пустые клетки => лучше, чем ничья
+        if ($countNull === $countElem) {
+            return 10;
+        }
+
+        /**
+         * Правило 2: 100% - победа
+         */
+        if ($countPlayer === $countElem) {
+            return 100000;
+        }
+
+        /**
+         * Правило 3: 100% - поражение
+         */
+        if ($countEnemy === $countElem) {
+            return -100;
+        }
+
+        /**
+         * Правило 4: Потенциальное поражение
+         */
+        if ($countEnemy > 0 && $countPlayer === 0) {
+            return -50;
+        }
+
+        /**
+         * Правило 5: Потенциальная победа
+         */
+        if ($countPlayer > 0 && $countEnemy === 0) {
+            return 50;
+        }
+        return 1; // Значение по умолчанию
+    }
 
 }

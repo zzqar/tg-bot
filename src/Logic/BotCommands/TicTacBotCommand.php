@@ -3,6 +3,9 @@
 namespace App\Logic\BotCommands;
 
 use App\Attribute\TypeCommand;
+use App\Exceptions\GameException;
+use App\Game\TicTac\GameRender;
+use App\Game\TicTac\Statistic;
 use App\Game\TicTac\TicTacGame;
 use App\Interfaces\BotCommandInterface;
 use TelegramBot\Api\Client;
@@ -22,21 +25,32 @@ class TicTacBotCommand extends BotCommandInterface
         return 'крестики нолики';
     }
 
+    /**
+     * @throws GameException
+     */
     public function execute(Message $message, Client $client): void
     {
-        $ticTac = new TicTacGame;
-        if ($this->getParamByKey('clear')){
-            $ticTac->clearStats();
+
+        if ($this->getParamByKey('cash') === 'clear'){
+            TicTacGame::clearCache();
             $client->deleteMessage($message->getChat()->getId(), $message->getMessageId());
             return;
         }
+
+        if ($this->getParamByKey('clear')){
+            Statistic::setStats([]);
+            $client->deleteMessage($message->getChat()->getId(), $message->getMessageId());
+            return;
+        }
+
+        $ticTac = new TicTacGame;
 
         if ($id = $ticTac->getMessByChatId($message->getChat()->getId())) {
             try {
                 $client->deleteMessage($message->getChat()->getId(), $id);
             } catch (\Throwable $e) {}
         }
-        $response = $ticTac->renderByState();
+        $response = (new GameRender($ticTac))->render();
         /** @var Message $mess */
         $mess = $this->sendResponse($client, $message, $response);
         $ticTac->setMessId($message->getChat()->getId(), $mess->getMessageId());

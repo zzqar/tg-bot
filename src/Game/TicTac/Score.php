@@ -7,7 +7,7 @@ class Score
     protected Move $move;
     protected int $score;
 
-    public function __construct(Move $move, int $score)
+    public function __construct(int $score, Move $move = new Move())
     {
         $this->move = $move;
         $this->score = $score;

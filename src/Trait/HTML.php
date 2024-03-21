@@ -31,4 +31,9 @@ trait HTML
         return '<b>'. $text .'</b>';
     }
 
+    public function br(): string
+    {
+        return '<br>';
+    }
+
 }

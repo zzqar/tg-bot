@@ -14,16 +14,14 @@ enum BoardValue: string
         return $enums[$index];
     }
 
-    public function getAnother(): ?BoardValue
+    public function getAnother(): BoardValue
     {
-        foreach (self::cases() as $enum){
-            if (!in_array($enum, [$this, self::null], true)){
-                return $enum;
-            }
-        }
-        return null;
+        return match ($this) {
+            self::x => self::o,
+            self::o => self::x,
+            default => self::null
+        };
     }
-
 
 }
 
